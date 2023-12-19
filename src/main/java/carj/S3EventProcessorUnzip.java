@@ -25,12 +25,6 @@ import java.util.zip.ZipInputStream;
 
 public class S3EventProcessorUnzip implements RequestHandler<S3Event, String> {
 
-    private static String TEMPLATE = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-            "<TimeStamps xmlns=\"https://preservica.com/TimeStamps\">\t\t\n" +
-            "\t<CreationTime>$CT$</CreationTime>\n" +
-            "\t<LastAccessTime>$LAT$</LastAccessTime>\n" +
-            "\t<LastModifiedTime>$LMT$</LastModifiedTime>\n" +
-            "</TimeStamps>";
 
     public static String replaceCharAt(String s, int pos, char c) {
         return s.substring(0,pos) + c + s.substring(pos+1);
@@ -88,29 +82,6 @@ public class S3EventProcessorUnzip implements RequestHandler<S3Event, String> {
                     String mimeType = FileMimeType.fromExtension(FilenameUtils.getExtension(fileName)).mimeType();
                     System.out.println("Extracting " + fileName + ", compressed: " + entry.getCompressedSize() + " bytes, extracted: " + entry.getSize() + " bytes, mimetype: " + mimeType);
 
-                    FileTime ct = entry.getCreationTime();
-                    FileTime at = entry.getLastAccessTime();
-                    FileTime mt = entry.getLastModifiedTime();
-
-                    String template;
-                    if (ct != null) {
-                        template = TEMPLATE.replace("$CT$", ct.toString());
-                    } else {
-                        template = TEMPLATE.replace("$CT$", "");
-                    }
-
-                    if (at != null) {
-                        template = template.replace("$LAT$", at.toString());
-                    } else {
-                        template = template.replace("$LAT$", "");
-                    }
-
-                    if (mt != null) {
-                        template = template.replace("$LMT$", mt.toString());
-                    } else {
-                        template = template.replace("$LMT$", "");
-                    }
-
 
                     ByteBufferOutputStream outputStream = new ByteBufferOutputStream();
                     long bytesCopied = IOUtils.copyLarge(zis, outputStream);
@@ -121,21 +92,8 @@ public class S3EventProcessorUnzip implements RequestHandler<S3Event, String> {
                     meta.setContentLength(outputStream.size());
                     meta.setContentType(mimeType);
 
-                    
-
                     String key = String.format("%s%s", FilenameUtils.getFullPath(srcKey), utf_filename);
                     s3Client.putObject(srcBucket, key, is, meta);
-
-                    if (bytesCopied > 0L) {
-                        ObjectMetadata metadatameta = new ObjectMetadata();
-                        metadatameta.setContentLength(template.length());
-                        metadatameta.setContentType(FileMimeType.XML.mimeType());
-                        metadatameta.setContentEncoding("UTF-8");
-                        String metadatakey = String.format("%s%s.metadata", FilenameUtils.getFullPath(srcKey), utf_filename);
-                        InputStream metadataStream = new ByteArrayInputStream(template.getBytes());
-                        PutObjectResult result = s3Client.putObject(srcBucket, metadatakey, metadataStream, metadatameta);
-                        metadataStream.close();
-                    }
 
                     is.close();
                     outputStream.close();
